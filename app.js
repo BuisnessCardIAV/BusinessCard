@@ -93,6 +93,21 @@ async function preloadProfileImages() {
             if (!p || !p.image) return;
             // normalize path: absolute if needed
             const src = (/^https?:\/\//i.test(p.image) || p.image.startsWith('/')) ? p.image : `/${p.image}`;
+
+            // Add a <link rel="preload" as="image"> to hint the browser to prioritize
+            try {
+                const selector = `link[rel="preload"][href="${src}"]`;
+                if (!document.querySelector(selector)) {
+                    const link = document.createElement('link');
+                    link.rel = 'preload';
+                    link.as = 'image';
+                    link.href = src;
+                    document.head.appendChild(link);
+                }
+            } catch (err) {
+                // ignore and continue
+            }
+
             const img = new Image();
             img.src = src;
             img.onload = () => console.debug('Preloaded image', src);
@@ -374,6 +389,9 @@ async function renderCard(profileId) {
 document.addEventListener('DOMContentLoaded', async () => {
     // Ensure the list of available profiles is loaded (auto-discovery)
     if (typeof ensureProfilesLoaded === 'function') await ensureProfilesLoaded();
+
+    // Start preloading profile images in background (non-blocking)
+    if (typeof preloadProfileImages === 'function') preloadProfileImages();
 
     let profileId = getProfileFromURL();
     
