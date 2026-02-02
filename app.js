@@ -86,7 +86,7 @@ async function renderCard(profileId) {
                 <p>Available profiles:</p>
                 <ul class="profile-list">
                     ${loadedProfiles.map((p, idx) => 
-                        p ? `<li><a href="${p.path || '#' + availableProfiles[idx]}">${p.name} (${p.path})</a></li>` : ''
+                        p ? `<li><a href="${p.path || '#' + availableProfiles[idx]}">${p.name} - ${p.title}</a></li>` : ''
                     ).join('')}
                 </ul>
             </div>
@@ -108,7 +108,7 @@ async function renderCard(profileId) {
                 <p>Available profiles:</p>
                 <ul class="profile-list">
                     ${loadedProfiles.map((p, idx) => 
-                        p ? `<li><a href="${p.path || '#' + availableProfiles[idx]}">${p.name} (${p.path})</a></li>` : ''
+                        p ? `<li><a href="${p.path || '#' + availableProfiles[idx]}">${p.name} - ${p.title}</a></li>` : ''
                     ).join('')}
                 </ul>
             </div>
