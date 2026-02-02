@@ -18,130 +18,121 @@ function getProfileFromURL() {
     return null;
 }
 
-// Map custom path to profile ID
-async function getProfileIdFromPath(customPath) {
-    // If path already matches a profile ID, return it
-    if (availableProfiles.includes(customPath)) {
-        return customPath;
-    }
-    
-    // Otherwise, search profiles for matching path
-    for (const id of availableProfiles) {
-        const profile = await loadProfile(id);
-        if (profile && profile.path === '/' + customPath) {
-            return id;
-        }
-    }
-    
-    return null;
-}
+// Load a profile JSON by id (with simple in-memory cache). Returns null on error.
+async function loadProfile(id) {
+    // profilesCache is defined in profiles.js
+    if (typeof profilesCache !== 'undefined' && profilesCache[id]) return profilesCache[id];
 
-// Load profile from JSON file
-async function loadProfile(profileId) {
-    // Check cache first
-    if (profilesCache[profileId]) {
-        return profilesCache[profileId];
-    }
-    
     try {
-        const response = await fetch(`profiles/${profileId}.json`);
-        if (!response.ok) {
-            throw new Error('Profile not found');
+        const res = await fetch(`profiles/${id}.json`);
+        if (!res.ok) {
+            console.warn('Failed to fetch profile', id, res.status);
+            return null;
         }
-        const profile = await response.json();
-        profilesCache[profileId] = profile;
-        return profile;
-    } catch (error) {
-        console.error(`Error loading profile ${profileId}:`, error);
+        const data = await res.json();
+        if (typeof profilesCache !== 'undefined') profilesCache[id] = data;
+        return data;
+    } catch (err) {
+        console.warn('Error loading profile', id, err);
         return null;
     }
 }
 
-// Generate vCard content
-function generateVCard(profile) {
-    const emails = Array.isArray(profile.email) ? profile.email : [profile.email];
-    const emailLines = emails.map((email, idx) => 
-        `EMAIL;TYPE=${idx === 0 ? 'WORK,PREF' : 'HOME'}:${email}`
-    ).join('\n');
-    
-    const phones = Array.isArray(profile.phone) ? profile.phone : [profile.phone];
-    const phoneLines = phones.map((phone, idx) => 
-        `TEL;TYPE=${idx === 0 ? 'WORK,PREF' : 'CELL'}:${phone}`
-    ).join('\n');
-    
-    return `BEGIN:VCARD
-VERSION:3.0
-FN:${profile.name}
-TITLE:${profile.title}
-ORG:Hassan II Institute of Agronomy and Veterinary Medicine
-${phoneLines}
-${emailLines}
-URL:https://${profile.website}
-ADR:;;${profile.location}
-END:VCARD`;
+// Map a custom path segment (e.g. 'director' or '/director') to a profile ID from
+// `availableProfiles`. This will load each profile and compare the stored `path`
+// or a normalized version of the name if needed. Returns the matching profile ID
+// or null when no match is found.
+async function getProfileIdFromPath(segment) {
+    if (!segment) return null;
+    const normalized = segment.replace(/^\/+/, '').replace(/\.(html|htm)$/i, '');
+
+    // Direct id match
+    if (typeof availableProfiles !== 'undefined' && availableProfiles.includes(normalized)) {
+        return normalized;
+    }
+
+    if (typeof availableProfiles === 'undefined') return null;
+
+    // Try to find by the profile's declared `path` or by a slugified name
+    for (const id of availableProfiles) {
+        const p = await loadProfile(id);
+        if (!p) continue;
+
+        // compare declared path (remove leading slash)
+        if (p.path) {
+            const pPath = String(p.path).replace(/^\/+/, '').replace(/\/(?:index\.html)?$/, '');
+            if (pPath === normalized) return id;
+            // also support matching with or without the leading slash
+            if (`/${pPath}` === normalized || pPath === `/${normalized}`) return id;
+        }
+
+        // fallback: compare a slug of the name
+        if (p.name) {
+            const slug = String(p.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+            if (slug === normalized.toLowerCase()) return id;
+        }
+    }
+
+    return null;
 }
 
-// Generate vCard data URL
+// Generate basic vCard content (CRLF-separated), no photo
+function generateVCard(profile) {
+    const CRLF = '\r\n';
+    const emails = Array.isArray(profile.email) ? profile.email : [profile.email];
+    const emailLines = emails.map((email, idx) =>
+        `EMAIL;TYPE=${idx === 0 ? 'WORK,PREF' : 'HOME'}:${email}`
+    ).join(CRLF);
+
+    const phones = Array.isArray(profile.phone) ? profile.phone : [profile.phone];
+    const phoneLines = phones.map((phone, idx) =>
+        `TEL;TYPE=${idx === 0 ? 'WORK,PREF' : 'CELL'}:${phone}`
+    ).join(CRLF);
+
+    // N: family;given;additional;prefix;suffix - try to split name reasonably
+    let nField = '';
+    if (profile.name) {
+        const parts = profile.name.trim().split(/\s+/);
+        const given = parts.shift() || '';
+        const family = parts.length ? parts.pop() : '';
+        const additional = parts.join(' ');
+        nField = `N:${family};${given};${additional};;`;
+    }
+
+    const parts = [
+        'BEGIN:VCARD',
+        'VERSION:3.0',
+        `FN:${profile.name || ''}`,
+        nField,
+        `TITLE:${profile.title || ''}`,
+        'ORG:Hassan II Institute of Agronomy and Veterinary Medicine',
+    ];
+
+    if (phoneLines) parts.push(phoneLines);
+    if (emailLines) parts.push(emailLines);
+    parts.push(`URL:https://${profile.website || ''}`);
+    parts.push(`ADR:;;${profile.location || ''}`);
+    parts.push('END:VCARD');
+
+    return parts.filter(Boolean).join(CRLF);
+}
+
+
+
+// Generate vCard data URL (sync, without photo)
 function getVCardUrl(profile) {
     const vcard = generateVCard(profile);
     return 'data:text/vcard;charset=utf-8,' + encodeURIComponent(vcard);
 }
 
 // Create vCard Blob
-// Helper: convert Blob to base64 (data part)
-function blobToBase64(blob) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const result = reader.result;
-            const comma = result.indexOf(',');
-            resolve(comma >= 0 ? result.slice(comma + 1) : result);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-    });
-}
-
-// Generate vCard including embedded PHOTO (if available)
-async function generateVCardWithPhoto(profile) {
-    const emails = Array.isArray(profile.email) ? profile.email : [profile.email];
-    const emailLines = emails.map((email, idx) => 
-        `EMAIL;TYPE=${idx === 0 ? 'WORK,PREF' : 'HOME'}:${email}`
-    ).join('\n');
-    
-    const phones = Array.isArray(profile.phone) ? profile.phone : [profile.phone];
-    const phoneLines = phones.map((phone, idx) => 
-        `TEL;TYPE=${idx === 0 ? 'WORK,PREF' : 'CELL'}:${phone}`
-    ).join('\n');
-
-    let photoLine = '';
-    if (profile.image) {
-        try {
-            const resp = await fetch(profile.image);
-            if (resp.ok) {
-                const imgBlob = await resp.blob();
-                const base64 = await blobToBase64(imgBlob);
-                const mime = imgBlob.type || 'image/jpeg';
-                const typeLabel = mime.split('/')[1] ? mime.split('/')[1].toUpperCase() : 'JPEG';
-                // vCard 3.0 uses PHOTO;ENCODING=b;TYPE=JPEG:BASE64
-                photoLine = `PHOTO;ENCODING=b;TYPE=${typeLabel}:${base64}\n`;
-            }
-        } catch (e) {
-            console.warn('Could not load profile image for vCard embedding:', e);
-        }
-    }
-
-    return `BEGIN:VCARD\nVERSION:3.0\nFN:${profile.name}\nTITLE:${profile.title}\nORG:Hassan II Institute of Agronomy and Veterinary Medicine\n${photoLine}${phoneLines}\n${emailLines}\nURL:https://${profile.website}\nADR:;;${profile.location}\nEND:VCARD`;
-}
-
-// Create vCard Blob (async, may embed photo)
-async function getVCardBlob(profile) {
-    const vcard = await generateVCardWithPhoto(profile);
+function getVCardBlob(profile) {
+    const vcard = generateVCard(profile);
     return new Blob([vcard], { type: 'text/vcard;charset=utf-8' });
 }
 
 // Open vCard to add to contacts (best-effort across platforms)
-function openVCard(profile) {
+async function openVCard(profile) {
     const blob = getVCardBlob(profile);
     const filename = `${profile.name.replace(/\s+/g, '_')}.vcf`;
 
@@ -155,14 +146,11 @@ function openVCard(profile) {
     try {
         const file = new File([blob], filename, { type: blob.type });
         if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
-            navigator.share({ files: [file], title: `Add ${profile.name}`, text: `Import contact for ${profile.name}` })
-                .catch(() => {
-                    // if share fails, fall back to blob URL
-                });
+            await navigator.share({ files: [file], title: `Add ${profile.name}`, text: `Import contact for ${profile.name}` });
             return;
         }
     } catch (e) {
-        // ignore and fall back
+        console.warn('Web Share failed or unavailable:', e);
     }
 
     // Try to open a blob URL in a new tab/window - some systems will hand off to the contacts app
@@ -174,9 +162,14 @@ function openVCard(profile) {
     a.target = '_blank';
     a.rel = 'noopener';
     // Note: we intentionally do NOT set a.download so the OS/browser can decide how to handle the .vcf
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    try {
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    } catch (err) {
+        console.error('Opening vCard blob URL failed:', err);
+        alert('Unable to open vCard automatically. Use the "download .vcf" link below to save and open it manually.');
+    }
 
     // Revoke the object URL shortly after
     setTimeout(() => URL.revokeObjectURL(url), 10000);
@@ -228,8 +221,20 @@ async function renderCard(profileId) {
     }
 
     // Render the business card
-    const emails = Array.isArray(profile.email) ? profile.email : [profile.email];
-    const phones = Array.isArray(profile.phone) ? profile.phone : [profile.phone];
+    const emails = Array.isArray(profile.email) ? profile.email : (profile.email ? [profile.email] : []);
+    const phones = Array.isArray(profile.phone) ? profile.phone : (profile.phone ? [profile.phone] : []);
+
+    // Debug: show loaded contact arrays
+    console.debug('renderCard:', profileId, { phones, emails });
+
+    // Build consistent HTML for lists of contacts (joined with a separator)
+    const emailHtml = emails.map((email) => `
+                        <a href="mailto:${email}" class="contact-text contact-link">${email}</a>
+                    `).join(' &nbsp; - &nbsp; ');
+
+    const phoneHtml = phones.map((phone) => `
+                        <a href="tel:${phone.replace(/\s/g, '')}" class="contact-text contact-link">${phone}</a>
+                    `).join(' &nbsp; - &nbsp; ');
     
     container.innerHTML = `
         <div class="card-simple">
@@ -242,7 +247,9 @@ async function renderCard(profileId) {
 
             <!-- Profile Image & Name -->
             <div class="profile-simple text-center">
-                <img src="${profile.image}" alt="${profile.name}" class="profile-pic">
+                ${profile.image ? `
+                    <img src="${profile.image}" alt="${profile.name}" class="profile-pic">
+                ` : ''}
                 <h1 class="profile-name">${profile.name}</h1>
                 ${profile.nameAr ? `<p class="profile-name-ar">${profile.nameAr}</p>` : ''}
                 <p class="profile-title">${profile.title}</p>
@@ -267,9 +274,7 @@ async function renderCard(profileId) {
                 <div class="contact-line">
                     <i class="fas fa-phone"></i>
                     <div>
-                        ${phones.map((phone, idx) => `
-                            <a href="tel:${phone.replace(/\s/g, '')}" class="contact-text contact-link">${phone}</a>${idx < phones.length - 1 ? ' &nbsp; - &nbsp; ' : ''}
-                        `).join('')}
+                        ${phoneHtml}
                     </div>
                 </div>
                 ` : ''}
@@ -279,9 +284,7 @@ async function renderCard(profileId) {
                 <div class="contact-line">
                     <i class="fas fa-envelope"></i>
                     <div>
-                        ${emails.map((email, idx) => `
-                            <a href="mailto:${email}" class="contact-text contact-link">${email}</a>${idx < emails.length - 1 ? ' &nbsp; - &nbsp; ' : ''}
-                        `).join('')}
+                        ${emailHtml}
                     </div>
                 </div>
                 ` : ''}
@@ -304,6 +307,7 @@ async function renderCard(profileId) {
                     </svg>
                     <span class="btn-add-text">Add to Contacts</span>
                 </button>
+               
             </div>
         </div>
     `;
@@ -313,6 +317,26 @@ async function renderCard(profileId) {
     
     // Make open function available globally
     window.openCurrentVCard = () => openVCard(profile);
+    // Make download fallback available globally
+    window.downloadCurrentVCard = () => {
+        try {
+            const vcard = generateVCard(profile);
+            console.log('vCard content:\n', vcard);
+            const blob = new Blob([vcard], { type: 'text/vcard;charset=utf-8' });
+            const filename = `${profile.name.replace(/\s+/g, '_')}.vcf`;
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+        } catch (err) {
+            console.error('Download fallback failed', err);
+            alert('Failed to prepare vCard for download. See console for details.');
+        }
+    };
 }
 
 // Initialize on page load
