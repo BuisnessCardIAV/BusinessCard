@@ -91,8 +91,8 @@ async function preloadProfileImages() {
 
         profiles.forEach(p => {
             if (!p || !p.image) return;
-            // normalize path: absolute if needed
-            const src = (/^https?:\/\//i.test(p.image) || p.image.startsWith('/')) ? p.image : `/${p.image}`;
+            // Build asset URL using site base so it works on GitHub Pages and local server
+            const src = getAssetUrl(p.image);
 
             // Add a <link rel="preload" as="image"> to hint the browser to prioritize
             try {
@@ -114,6 +114,31 @@ async function preloadProfileImages() {
             img.onerror = () => console.warn('Failed to preload image', src);
         });
     }
+}
+
+// Compute the site's base path (pathname without filename) with leading and trailing slash.
+function getBasePath() {
+    let basePath = window.location.pathname || '/';
+    // Remove filename if present (e.g. /repo/index.html or /index.html)
+    if (basePath.indexOf('.') !== -1) {
+        basePath = basePath.substring(0, basePath.lastIndexOf('/') + 1);
+    }
+    if (!basePath.startsWith('/')) basePath = '/' + basePath;
+    if (!basePath.endsWith('/')) basePath += '/';
+    return basePath;
+}
+
+// Build an absolute URL for site assets (images etc.) that works on GitHub Pages
+// and local servers. If the path is already absolute (http(s)), return it.
+function getAssetUrl(assetPath) {
+    if (!assetPath) return assetPath;
+    if (/^https?:\/\//i.test(assetPath)) return assetPath;
+    // If assetPath already starts with the base path, return origin + assetPath
+    const basePath = getBasePath();
+    if (assetPath.startsWith(basePath)) return window.location.origin + assetPath;
+    // Strip any leading slash and join with basePath
+    const clean = assetPath.replace(/^\/+/, '');
+    return window.location.origin + basePath + clean;
 }
 
 // Generate basic vCard content (CRLF-separated), no photo
@@ -218,6 +243,14 @@ async function openVCard(profile) {
 // Render business card
 async function renderCard(profileId) {
     const container = document.getElementById('card-container');
+    // Build a base path for pretty URLs (origin + base path without filename)
+    const origin = window.location.origin;
+    let basePath = window.location.pathname || '/';
+    if (basePath.indexOf('.') !== -1) {
+        basePath = basePath.substring(0, basePath.lastIndexOf('/') + 1);
+    }
+    if (!basePath.endsWith('/')) basePath += '/';
+    const shareBase = `${origin}${basePath}`;
     
     if (!profileId) {
         // Load all profiles to show names
@@ -230,7 +263,7 @@ async function renderCard(profileId) {
                 <p>Available profiles:</p>
                 <ul class="profile-list">
                     ${loadedProfiles.map((p, idx) => 
-                        p ? `<li><a href="#${availableProfiles[idx]}">${p.name} - ${p.title}</a></li>` : ''
+                        p ? `<li><div><a href="#${availableProfiles[idx]}">${p.name} - ${p.title}</a></div><div><button class="profile-copy-icon" data-id="${availableProfiles[idx]}" title="Copy profile link" onclick="copyProfileLink('${availableProfiles[idx]}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 14a3 3 0 0 1 0-4l4-4a3 3 0 0 1 4 4l-1 1" stroke="#1a5d3a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></li>` : ''
                     ).join('')}
                 </ul>
             </div>
@@ -252,7 +285,7 @@ async function renderCard(profileId) {
                 <p>Available profiles:</p>
                 <ul class="profile-list">
                     ${loadedProfiles.map((p, idx) => 
-                        p ? `<li><a href="#${availableProfiles[idx]}">${p.name} - ${p.title}</a></li>` : ''
+                        p ? `<li><div><a href="#${availableProfiles[idx]}">${p.name} - ${p.title}</a></div><div><button class="profile-copy-icon" data-id="${availableProfiles[idx]}" title="Copy profile link" onclick="copyProfileLink('${availableProfiles[idx]}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 14a3 3 0 0 1 0-4l4-4a3 3 0 0 1 4 4l-1 1" stroke="#1a5d3a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></li>` : ''
                     ).join('')}
                 </ul>
             </div>
@@ -278,9 +311,7 @@ async function renderCard(profileId) {
     // Normalize image path so it works whether using hash routing (#id) or
     // direct path routes (/profile). If the configured path is relative (no
     // leading slash), make it absolute from site root.
-    const imgSrc = profile.image ? (
-        (/^https?:\/\//i.test(profile.image) || profile.image.startsWith('/')) ? profile.image : `/${profile.image}`
-    ) : null;
+    const imgSrc = profile.image ? getAssetUrl(profile.image) : null;
     
     container.innerHTML = `
         <div class="card-simple">
@@ -304,17 +335,7 @@ async function renderCard(profileId) {
 
             <!-- Contact Information -->
             <div class="contacts-simple">
-                <!-- Address -->
-                ${profile.location ? `
-                <div class="contact-line">
-                    <i class="fas fa-map-pin"></i>
-                    <div>
-                        <p class="contact-text">${profile.location}</p>
-                        ${profile.locationAr ? `<p class="contact-text-ar">${profile.locationAr}</p>` : ''}
-                    </div>
-                </div>
-                ` : ''}
-
+                
                 <!-- Phone -->
                 ${phones.length > 0 ? `
                 <div class="contact-line">
@@ -335,6 +356,8 @@ async function renderCard(profileId) {
                 </div>
                 ` : ''}
 
+                
+
                 <!-- Website -->
                 ${profile.website ? `
                 <div class="contact-line">
@@ -342,6 +365,17 @@ async function renderCard(profileId) {
                     <a href="https://${profile.website}" target="_blank" rel="noopener" class="contact-text contact-link">${profile.website}</a>
                 </div>
                 ` : ''}
+                <!-- Address -->
+                ${profile.location ? `
+                <div class="contact-line">
+                    <i class="fas fa-map-pin"></i>
+                    <div>
+                        <p class="contact-text">${profile.location}</p>
+                        ${profile.locationAr ? `<p class="contact-text-ar">${profile.locationAr}</p>` : ''}
+                    </div>
+                </div>
+                ` : ''}
+
             </div>
 
             <!-- Add to Contacts Button -->
@@ -385,6 +419,8 @@ async function renderCard(profileId) {
     };
 }
 
+
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
     // Ensure the list of available profiles is loaded (auto-discovery)
@@ -402,6 +438,47 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     await renderCard(profileId);
 });
+
+// Copy profile hash URL (#id) to clipboard and show a toast message
+async function copyProfileLink(id) {
+    try {
+        const origin = window.location.origin;
+        const base = getBasePath();
+        const url = `${origin}${base}#${id}`;
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(url);
+        } else {
+            const ta = document.createElement('textarea');
+            ta.value = url;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+        }
+
+        showToast('Link copied to clipboard');
+    } catch (err) {
+        console.error('Copy failed', err);
+        showToast('Failed to copy link');
+    }
+}
+
+// Simple toast utility
+function showToast(message, duration = 1800) {
+    let toast = document.querySelector('.site-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.className = 'site-toast';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.classList.add('show');
+    clearTimeout(toast._hideTimer);
+    toast._hideTimer = setTimeout(() => {
+        toast.classList.remove('show');
+    }, duration);
+}
 
 // Handle browser navigation (back/forward)
 window.addEventListener('popstate', async () => {
