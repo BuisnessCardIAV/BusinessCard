@@ -1,0 +1,13 @@
+{
+  "path": "/dcpd",
+  "name": "Pr. Mohamed Yessef",
+  "nameAr": "الأستاذ محمد يسف",
+  "title": "Directeur Adjoint de la Coopération, du Partenariat et du Développement",
+  "titleAr": "المدير المساعد المكلف بالتعاون والشراكة والتنمية",
+  "image": "persons/dcpd.jpeg",
+  "email": ["dcpd@iav.ac.ma", "m.yessef@iav.ac.ma", "y_toufik2006@yahoo.fr"],
+  "phone": ["+212 661 078 260"],
+  "location": "Madinat Al Irfane, P.O. Box 6202, Rabat, Morocco",
+  "locationAr": "مدينة العرفان ص.ب 6202 ، الرباط، المغرب",
+  "website": "www.iav.ac.ma"
+}

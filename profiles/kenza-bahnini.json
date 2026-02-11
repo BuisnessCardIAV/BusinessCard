@@ -1,0 +1,13 @@
+{
+  "path": "/communication",
+  "name": "Kenza BAHNINI",
+  "nameAr": "كنزة بهنيني",
+  "title": "Chargée de Communication",
+  "titleAr": "مكلفة بالتواصل",
+  "image": "persons/communication.jpeg",
+  "email": ["k.bahnini@iav.ac.ma", "communication@iav.ac.ma"],
+  "phone": ["+212 674 275 371", "+212 634 585 362"],
+  "location": "Madinat Al Irfane, P.O. Box 6202, Rabat, Morocco",
+  "locationAr": "مدينة العرفان ص.ب 6202 ، الرباط، المغرب",
+  "website": "www.iav.ac.ma"
+}

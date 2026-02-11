@@ -1,0 +1,13 @@
+{
+  "path": "/audit",
+  "name": "Younes El Ansari",
+  "nameAr": "يونس الأنصاري",
+  "title": "Chef du Département d'Audit",
+  "titleAr": "رئيس قسم التدقيق",
+  "image": "persons/audit.jpeg",
+  "email": ["Y.elansari@iav.ac.ma"],
+  "phone": ["+212 666 979 288"],
+  "location": "Madinat Al Irfane, P.O. Box 6202, Rabat, Morocco",
+  "locationAr": "مدينة العرفان ص.ب 6202 ، الرباط، المغرب",
+  "website": "www.iav.ac.ma"
+}
