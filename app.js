@@ -153,7 +153,7 @@ function getBasePath() {
                 const url = new URL(src, window.location.href);
                 let path = url.pathname;
                 // remove filename portion
-                if (path.lastIndexOf('/') > 0) {
+                if (path.lastIndexOf('/') >= 0) {
                     path = path.substring(0, path.lastIndexOf('/') + 1);
                 }
                 if (!path.endsWith('/')) path += '/';
@@ -203,6 +203,76 @@ function getAssetUrl(assetPath) {
     // Strip any leading slash and join with basePath
     const clean = assetPath.replace(/^\/+/, '');
     return window.location.origin + basePath + clean;
+}
+
+// Escape HTML for safe attribute/text usage
+function escapeHtml(value) {
+    return String(value || '').replace(/[&<>"']/g, (char) => {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        };
+        return map[char] || char;
+    });
+}
+
+// Deterministic hash to pick a fallback avatar variation
+function hashString(input) {
+    let hash = 0;
+    for (let i = 0; i < input.length; i++) {
+        hash = ((hash << 5) - hash) + input.charCodeAt(i);
+        hash |= 0;
+    }
+    return Math.abs(hash);
+}
+
+const FALLBACK_PREFIXES = [
+    'pr', 'pr.', 'prof', 'prof.', 'professeur', 'professor',
+    'dr', 'dr.', 'mr', 'mr.', 'mrs', 'mrs.', 'ms', 'ms.'
+];
+
+const FALLBACK_PALETTES = [
+    { bg: '#f3f7ff', accent: '#1a5d3a' },
+    { bg: '#fff5f6', accent: '#c41e3a' },
+    { bg: '#f4f8f2', accent: '#2f7a4d' },
+    { bg: '#f7f5ff', accent: '#4c4fb0' }
+];
+
+function getInitials(name) {
+    const raw = String(name || '').trim();
+    if (!raw) return '??';
+    const parts = raw.split(/\s+/).filter(Boolean);
+
+    // Drop known prefixes (e.g., Pr., Prof., Dr.) from the front
+    while (parts.length && FALLBACK_PREFIXES.includes(parts[0].toLowerCase())) {
+        parts.shift();
+    }
+
+    if (parts.length === 0) return '??';
+    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+
+    const first = parts[0].charAt(0).toUpperCase();
+    const last = parts[parts.length - 1].charAt(0).toUpperCase();
+    return `${first}.${last}`;
+}
+
+function getFallbackAvatarHtml(profileId, profileName) {
+    const seed = String(profileId || profileName || 'profile');
+    const hash = hashString(seed);
+    const palette = FALLBACK_PALETTES[hash % FALLBACK_PALETTES.length];
+    const label = escapeHtml(profileName || 'Profile');
+    const initials = escapeHtml(getInitials(profileName));
+
+    return `
+        <div class="profile-fallback" style="--fallback-bg:${palette.bg}; --fallback-accent:${palette.accent};" role="img" aria-label="${label}">
+            <div class="profile-fallback-inner">
+                <span class="profile-fallback-text">${initials}</span>
+            </div>
+        </div>
+    `;
 }
 
 // Generate basic vCard content (CRLF-separated), no photo
@@ -376,6 +446,9 @@ async function renderCard(profileId) {
     // direct path routes (/profile). If the configured path is relative (no
     // leading slash), make it absolute from site root.
     const imgSrc = profile.image ? getAssetUrl(profile.image) : null;
+    const avatarHtml = imgSrc
+        ? `<img src="${imgSrc}" alt="${escapeHtml(profile.name)}" class="profile-pic">`
+        : getFallbackAvatarHtml(profileId, profile.name);
     
     container.innerHTML = `
         <div class="card-simple">
@@ -388,9 +461,9 @@ async function renderCard(profileId) {
 
             <!-- Profile Image & Name -->
             <div class="profile-simple text-center">
-                ${imgSrc ? `
-                    <img src="${imgSrc}" alt="${profile.name}" class="profile-pic">
-                ` : ''}
+                <div class="profile-avatar">
+                    ${avatarHtml}
+                </div>
                 <h1 class="profile-name">${profile.name}</h1>
                 ${profile.nameAr ? `<p class="profile-name-ar">${profile.nameAr}</p>` : ''}
                 <p class="profile-title">${profile.title}</p>
@@ -458,6 +531,17 @@ async function renderCard(profileId) {
 
     // Update page title
     document.title = `${profile.name} - IAV Hassan II`;
+
+    // If image fails to load, swap in a clean fallback avatar
+    const img = container.querySelector('.profile-pic');
+    if (img) {
+        img.addEventListener('error', () => {
+            const avatar = container.querySelector('.profile-avatar');
+            if (avatar) {
+                avatar.innerHTML = getFallbackAvatarHtml(profileId, profile.name);
+            }
+        }, { once: true });
+    }
     
     // Make open function available globally
     window.openCurrentVCard = () => openVCard(profile);

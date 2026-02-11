@@ -74,6 +74,39 @@ body {
     box-sizing: border-box;
 }
 
+.profile-avatar {
+    display: flex;
+    justify-content: center;
+}
+
+.profile-fallback {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    margin-bottom: 20px;
+    padding: 5px;
+    background: linear-gradient(180deg, var(--primary-color) 0%, var(--accent-red) 100%);
+    box-sizing: border-box;
+}
+
+.profile-fallback-inner {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: linear-gradient(160deg, #f8f8f8 0%, #e6e6e6 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.profile-fallback-text {
+    font-weight: 700;
+    font-size: 75.2px;
+    letter-spacing: 1.2px;
+    color: #111;
+    text-shadow: 0 1px 0 #ffffff, 0 0 6px rgba(0, 0, 0, 0.12);
+}
+
 /* Contacts */
 .contacts-simple {
     margin-bottom: 20px;
@@ -322,6 +355,17 @@ body {
         width: 110px;
         height: 110px;
         border-width: 3px;
+    }
+
+    .profile-fallback {
+        width: 110px;
+        height: 110px;
+        padding: 3px;
+    }
+
+    .profile-fallback-text {
+        font-size: 30px;
+        letter-spacing: 0.8px;
     }
 
     .profile-name {
