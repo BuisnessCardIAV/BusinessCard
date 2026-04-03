@@ -1,0 +1,15 @@
+{
+  "path": "/charge-de-mission",
+  "name": "Meriem KICH",
+  "nameAr": "مريم كيش",
+  "title": "Project Management Officer ",
+  "titleAr": "",
+  "image": "persons/meriem.png",
+  "email": ["m.kich@iav.ac.ma"],
+  "phone": ["+212 6 33 96 02 03" , "+212 6 34 60 23 75 "],
+  "location": "Madinat Al Irfane, B.P. 6202, Rabat, Maroc",
+  "locationAr": "مدينة العرفان ص.ب 6202 ، الرباط، المغرب",
+  "website": "www.iav.ac.ma",
+  "iavTitle": "Agronomic and Veterinary Institute Hassan II",
+  "iavTitleAr": "معهد الحسن الثاني للزراعة و البيطرة"
+}
